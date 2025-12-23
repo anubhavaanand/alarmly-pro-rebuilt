@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.wakemeup.wake_me_up_pro"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -24,7 +24,7 @@ android {
         applicationId = "com.wakemeup.wake_me_up_pro"
         // minSdk 24 required for ML Kit pose detection
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true

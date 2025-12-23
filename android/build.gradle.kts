@@ -23,6 +23,8 @@ subprojects {
                 if (android.namespace == null) {
                     android.namespace = project.group.toString()
                 }
+                // Force compileSdk for all library modules to fix lStar issue
+                android.compileSdk = 36
             }
         }
     }
