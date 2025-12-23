@@ -28,6 +28,48 @@ class Alarm {
   late DateTime? lastTriggered;
   late int skipCount; // Track how many times user skipped
   
+  // ============ PREMIUM FEATURES (ALL FREE!) ============
+  
+  // Smart Alarm - wake during light sleep within window
+  late bool smartAlarmEnabled;
+  late int smartAlarmWindowMinutes; // e.g., 30 = wake up to 30 min early during light sleep
+  
+  // Gentle Wake - gradual volume increase
+  late bool gentleWakeEnabled;
+  late int gentleWakeDurationSeconds; // How long to gradually increase volume
+  
+  // Challenge Mode - multiple missions required
+  late bool challengeModeEnabled;
+  late List<String> challengeMissions; // List of mission types for challenge
+  
+  // Nap Mode
+  late bool isNapAlarm;
+  late int napDurationMinutes; // 0 = regular alarm, >0 = nap alarm
+  
+  // Snooze Settings
+  late int snoozeDurationMinutes;
+  late int maxSnoozeCount;
+  late int currentSnoozeCount;
+  
+  // Anti-Dismiss Features
+  late bool mathBeforeSnooze; // Require simple math to snooze
+  late bool noPhoneFlip; // Disable flip-to-snooze
+  late bool captchaRequired; // CAPTCHA before dismiss
+  
+  // Pre-Alarm
+  late bool preAlarmEnabled;
+  late int preAlarmMinutes; // Gentle notification X min before alarm
+  
+  // Weather-based wake
+  late bool weatherAnnouncementEnabled;
+  
+  // Motivational Quote
+  late bool showMotivationalQuote;
+  
+  // Spotify/Music Integration
+  late String? spotifyPlaylistUri;
+  late bool fadeInMusic;
+  
   Alarm();
   
   // Default alarm factory
@@ -51,7 +93,71 @@ class Alarm {
       ..missionData = null
       ..createdAt = DateTime.now()
       ..lastTriggered = null
-      ..skipCount = 0;
+      ..skipCount = 0
+      // Premium features - ALL FREE!
+      ..smartAlarmEnabled = false
+      ..smartAlarmWindowMinutes = 30
+      ..gentleWakeEnabled = true
+      ..gentleWakeDurationSeconds = 60
+      ..challengeModeEnabled = false
+      ..challengeMissions = []
+      ..isNapAlarm = false
+      ..napDurationMinutes = 0
+      ..snoozeDurationMinutes = 5
+      ..maxSnoozeCount = 3
+      ..currentSnoozeCount = 0
+      ..mathBeforeSnooze = false
+      ..noPhoneFlip = false
+      ..captchaRequired = false
+      ..preAlarmEnabled = false
+      ..preAlarmMinutes = 5
+      ..weatherAnnouncementEnabled = false
+      ..showMotivationalQuote = true
+      ..spotifyPlaylistUri = null
+      ..fadeInMusic = true;
+  }
+  
+  // Create a nap alarm
+  factory Alarm.createNap({
+    required int durationMinutes,
+    MissionType missionType = MissionType.shake,
+  }) {
+    final now = DateTime.now();
+    return Alarm()
+      ..time = now.add(Duration(minutes: durationMinutes))
+      ..isEnabled = true
+      ..repeatDays = []
+      ..missionType = missionType
+      ..missionDifficulty = 1
+      ..wakeUpCheckEnabled = false
+      ..soundPath = 'gentle'
+      ..volume = 0.7
+      ..vibrate = true
+      ..label = 'Nap Alarm'
+      ..missionData = null
+      ..createdAt = DateTime.now()
+      ..lastTriggered = null
+      ..skipCount = 0
+      ..smartAlarmEnabled = false
+      ..smartAlarmWindowMinutes = 5
+      ..gentleWakeEnabled = true
+      ..gentleWakeDurationSeconds = 30
+      ..challengeModeEnabled = false
+      ..challengeMissions = []
+      ..isNapAlarm = true
+      ..napDurationMinutes = durationMinutes
+      ..snoozeDurationMinutes = 2
+      ..maxSnoozeCount = 1
+      ..currentSnoozeCount = 0
+      ..mathBeforeSnooze = false
+      ..noPhoneFlip = false
+      ..captchaRequired = false
+      ..preAlarmEnabled = false
+      ..preAlarmMinutes = 0
+      ..weatherAnnouncementEnabled = false
+      ..showMotivationalQuote = false
+      ..spotifyPlaylistUri = null
+      ..fadeInMusic = true;
   }
   
   String get timeString {

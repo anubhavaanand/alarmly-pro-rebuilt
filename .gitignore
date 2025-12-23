@@ -1,4 +1,77 @@
-# Miscellaneous
+# ============================================
+# WAKE ME UP PRO - GITIGNORE
+# Professional deployment configuration
+# ============================================
+
+# ============================================
+# 🔐 SECRETS & API KEYS (NEVER COMMIT)
+# ============================================
+# Environment files (but keep .env.example as template)
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+!.env.example
+
+# API Keys & Secrets
+secrets/
+**/secrets/
+api_keys.dart
+**/api_keys.dart
+config/secrets.dart
+**/config/secrets.dart
+lib/config/secrets.dart
+lib/config/api_keys.dart
+
+# Firebase & Google Services
+google-services.json
+**/google-services.json
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+firebase_options.dart
+**/firebase_options.dart
+
+# ============================================
+# 🔑 SIGNING & KEYSTORES (DEPLOYMENT)
+# ============================================
+# Android Keystores
+*.jks
+*.keystore
+upload-keystore.jks
+release.keystore
+debug.keystore
+key.properties
+keystore.properties
+signing.properties
+**/key.properties
+**/keystore.properties
+
+# iOS Signing
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+ExportOptions.plist
+
+# ============================================
+# 💻 LOCAL DEVELOPMENT
+# ============================================
+# Local properties (SDK paths, etc.)
+local.properties
+**/local.properties
+android/local.properties
+
+# Personal IDE configs
+.vscode/settings.json
+.vscode/launch.json
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/*.iml
+
+# ============================================
+# 🗂️ MISCELLANEOUS
+# ============================================
 *.class
 *.log
 *.pyc
@@ -9,17 +82,27 @@
 .history
 .svn/
 migrate_working_dir/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
+# ============================================
+# 💼 IDE & EDITORS
+# ============================================
 # IntelliJ related
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# VS Code
+# VS Code (keep shared configs, ignore personal)
 .vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
 
-# Flutter/Dart/Pub related
+# ============================================
+# 🎯 FLUTTER/DART BUILD
+# ============================================
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
@@ -29,6 +112,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+**/build/
 
 # Symbolication related
 app.*.symbols
@@ -36,26 +120,31 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
+# ============================================
+# 🤖 ANDROID
+# ============================================
+# Android Studio build artifacts
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/.gradle/
+/android/gradle.properties
+/android/captures/
+/android/.idea/
+/android/.cxx/
+/android/app/.cxx/
+*.apk
+*.aab
+!app-release.apk
 
-# Isar generated files
+# Isar database files (generated at runtime)
 *.g.dart
 *.isar
 *.isar.lock
 
-# Android
-/android/.gradle
-/android/captures/
-/android/local.properties
-/android/.idea
-/android/gradle.properties
-*.jks
-keystore.properties
-
-# iOS
+# ============================================
+# 🍎 iOS
+# ============================================
 **/ios/**/*.mode1v3
 **/ios/**/*.mode2v3
 **/ios/**/*.moved-aside
@@ -83,7 +172,11 @@ keystore.properties
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/ServiceDefinitions.json
 **/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/Podfile.lock
 
+# ============================================
+# 🖥️ DESKTOP PLATFORMS
+# ============================================
 # macOS
 **/macos/Flutter/GeneratedPluginRegistrant.swift
 **/macos/Flutter/ephemeral
@@ -98,10 +191,85 @@ keystore.properties
 **/windows/flutter/generated_plugin_registrant.h
 **/windows/flutter/generated_plugins.cmake
 
-# Web
+# ============================================
+# 🌐 WEB
+# ============================================
 /web/
 
-# Temporary files
+# ============================================
+# 📊 LOGS & DEBUGGING
+# ============================================
+*.log
 *.tmp
 *.bak
 *~
+logs/
+*.stackdump
+crash_reports/
+debug_logs/
+
+# ============================================
+# 📦 DEPLOYMENT & CI/CD
+# ============================================
+# Fastlane
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+**/fastlane/README.md
+
+# Code coverage
+coverage/
+*.lcov
+.coverage
+
+# Test artifacts
+test-results/
+.test_coverage/
+
+# ============================================
+# 🗄️ DATABASE & CACHE
+# ============================================
+# SQLite & Isar databases
+*.db
+*.sqlite
+*.sqlite3
+*.isar
+*.isar.lock
+
+# Cache directories
+.cache/
+__pycache__/
+*.pyc
+
+# ============================================
+# 📱 APP BUNDLES & BINARIES
+# ============================================
+# Release builds (keep only what's needed)
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ============================================
+# 🔧 GENERATED CODE (REBUILD LOCALLY)
+# ============================================
+# Isar generated
+lib/**/*.g.dart
+# Keep in git for CI, uncomment if you prefer local generation only
+# *.g.dart
+
+# ============================================
+# 📝 NOTES & PERSONAL FILES
+# ============================================
+TODO.local.md
+NOTES.md
+personal/
+scratch/
+*.draft
+
+# ============================================
+# 🚫 SECURITY SCAN RESULTS
+# ============================================
+security_scan/
+vulnerability_report/
+*.sarif

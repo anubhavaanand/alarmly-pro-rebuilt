@@ -7,6 +7,8 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
 
 import 'models/alarm.dart';
+import 'models/sleep_record.dart';
+import 'models/alarm_stats.dart';
 import 'services/alarm_service.dart';
 import 'services/notification_service.dart';
 import 'screens/home_screen.dart';
@@ -27,7 +29,7 @@ void main() async {
   // Initialize Isar database
   final dir = await getApplicationDocumentsDirectory();
   final isar = await Isar.open(
-    [AlarmSchema],
+    [AlarmSchema, SleepRecordSchema, AlarmStatsSchema, AggregatedStatsSchema],
     directory: dir.path,
   );
   
