@@ -14,6 +14,18 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+    
+    // Fix for isar_flutter_libs namespace issue with AGP 8+
+    afterEvaluate {
+        if (project.hasProperty("android")) {
+            val android = project.extensions.getByName("android")
+            if (android is com.android.build.gradle.LibraryExtension) {
+                if (android.namespace == null) {
+                    android.namespace = project.group.toString()
+                }
+            }
+        }
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")

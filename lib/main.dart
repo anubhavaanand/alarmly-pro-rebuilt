@@ -137,16 +137,15 @@ class _WakeMeUpProAppState extends State<WakeMeUpProApp> with WidgetsBindingObse
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF00F5FF), // Cyan
-          secondary: const Color(0xFFFF00FF), // Magenta
-          surface: const Color(0xFF1A1A2E),
-          background: const Color(0xFF0F0F1E),
-          error: const Color(0xFFFF3366),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF00F5FF), // Cyan
+          secondary: Color(0xFFFF00FF), // Magenta
+          surface: Color(0xFF1A1A2E),
+          error: Color(0xFFFF3366),
         ),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         scaffoldBackgroundColor: const Color(0xFF0F0F1E),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF1A1A2E),
           elevation: 4,
           shape: RoundedRectangleBorder(

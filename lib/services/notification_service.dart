@@ -40,7 +40,6 @@ class NotificationService {
       importance: Importance.max,
       playSound: true,
       enableVibration: true,
-      sound: RawResourceAndroidNotificationSound('alarm_sound'),
     );
     
     // Wake-up check channel
@@ -73,7 +72,7 @@ class NotificationService {
       '⏰ Are you still awake?',
       'Tap to confirm you\'re up, or alarm will restart',
       scheduledTime,
-      NotificationDetails(
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           'wake_check_channel',
           'Wake-up Verification',
@@ -88,9 +87,9 @@ class NotificationService {
           interruptionLevel: InterruptionLevel.critical,
         ),
       ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      androidAllowWhileIdle: true,
     );
   }
   
@@ -119,6 +118,7 @@ class NotificationService {
             interruptionLevel: InterruptionLevel.critical,
           ),
         ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
@@ -133,14 +133,57 @@ class NotificationService {
     // Cancel wake-up check
     await _notifications.cancel(alarmId + 10000);
     
+    // Cancel snooze notification
+    await _notifications.cancel(alarmId + 20000);
+    
     // Cancel iOS cascade (32 notifications)
     for (int i = 0; i < 32; i++) {
       await _notifications.cancel(alarmId * 100 + i);
     }
   }
   
+  /// Schedule a snooze notification
+  static Future<void> scheduleSnooze(
+    int alarmId,
+    DateTime snoozeTime,
+    String missionType,
+    int difficulty,
+  ) async {
+    final scheduledTime = tz.TZDateTime.from(snoozeTime, tz.local);
+    
+    await _notifications.zonedSchedule(
+      alarmId + 20000, // Offset ID for snooze
+      '⏰ Snooze Time Up!',
+      'Complete your mission to wake up',
+      scheduledTime,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'alarm_channel',
+          'Alarms',
+          importance: Importance.max,
+          priority: Priority.high,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
+          ongoing: true,
+          autoCancel: false,
+          playSound: true,
+          enableVibration: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.critical,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: '$alarmId|$missionType|$difficulty',
+    );
+  }
+  
   static void _onNotificationTapped(NotificationResponse response) {
-    print('Notification tapped: ${response.payload}');
     // Handle notification tap - navigate to app
+    // The payload contains: alarmId|missionType|difficulty
   }
 }

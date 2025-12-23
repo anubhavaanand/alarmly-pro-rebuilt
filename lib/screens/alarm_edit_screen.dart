@@ -24,6 +24,17 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
   late int _difficulty;
   late bool _wakeUpCheck;
   late Set<int> _repeatDays;
+  late String _selectedSound;
+  late bool _vibrate;
+  
+  // Available alarm sounds
+  static const List<Map<String, String>> _alarmSounds = [
+    {'id': 'default', 'name': 'Default'},
+    {'id': 'gentle_wake', 'name': 'Gentle Wake'},
+    {'id': 'energetic_morning', 'name': 'Energetic Morning'},
+    {'id': 'nature_birds', 'name': 'Nature Birds'},
+    {'id': 'classic_beep', 'name': 'Classic Beep'},
+  ];
   
   @override
   void initState() {
@@ -34,6 +45,8 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     _difficulty = widget.alarm.missionDifficulty;
     _wakeUpCheck = widget.alarm.wakeUpCheckEnabled;
     _repeatDays = widget.alarm.repeatDays.toSet();
+    _selectedSound = widget.alarm.soundPath;
+    _vibrate = widget.alarm.vibrate;
   }
   
   @override
@@ -78,6 +91,14 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
           
           // Difficulty
           _buildDifficultySection(),
+          const SizedBox(height: 24),
+          
+          // Sound selection
+          _buildSoundSection(),
+          const SizedBox(height: 24),
+          
+          // Vibration toggle
+          _buildVibrationSection(),
           const SizedBox(height: 24),
           
           // Wake-up check
@@ -285,6 +306,94 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
     );
   }
   
+  Widget _buildSoundSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Alarm Sound',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A3E),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButton<String>(
+                value: _selectedSound,
+                isExpanded: true,
+                dropdownColor: const Color(0xFF2A2A3E),
+                underline: const SizedBox(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+                icon: const Icon(
+                  Icons.arrow_drop_down,
+                  color: Color(0xFF00F5FF),
+                ),
+                items: _alarmSounds.map((sound) {
+                  return DropdownMenuItem<String>(
+                    value: sound['id'],
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.music_note,
+                          color: Color(0xFF00F5FF),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(sound['name']!),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedSound = value);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildVibrationSection() {
+    return Card(
+      child: SwitchListTile(
+        title: const Text(
+          'Vibration',
+          style: TextStyle(color: Colors.white),
+        ),
+        subtitle: const Text(
+          'Vibrate when alarm rings',
+          style: TextStyle(color: Colors.white70),
+        ),
+        secondary: Icon(
+          _vibrate ? Icons.vibration : Icons.phone_android,
+          color: _vibrate ? const Color(0xFF00F5FF) : Colors.white38,
+        ),
+        value: _vibrate,
+        onChanged: (value) {
+          setState(() => _vibrate = value);
+        },
+        activeColor: const Color(0xFF00F5FF),
+      ),
+    );
+  }
+  
   Widget _buildWakeUpCheckSection() {
     return Card(
       child: SwitchListTile(
@@ -326,13 +435,17 @@ class _AlarmEditScreenState extends State<AlarmEditScreen> {
       _selectedTime.minute,
     );
     
+    final sortedRepeatDays = _repeatDays.toList()..sort();
+    
     widget.alarm
       ..time = alarmTime
       ..label = _labelController.text
       ..missionType = _selectedMission
       ..missionDifficulty = _difficulty
       ..wakeUpCheckEnabled = _wakeUpCheck
-      ..repeatDays = _repeatDays.toList()..sort()
+      ..repeatDays = sortedRepeatDays
+      ..soundPath = _selectedSound
+      ..vibrate = _vibrate
       ..isEnabled = true;
     
     await AlarmService.scheduleAlarm(widget.alarm);

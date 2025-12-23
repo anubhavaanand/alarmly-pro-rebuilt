@@ -21,8 +21,7 @@ dependencies:
   path_provider: ^2.1.1
   
   # Alarm & Notifications
-  android_alarm_manager_plus: ^3.0.4
-  flutter_local_notifications: ^16.3.0
+  flutter_local_notifications: ^18.0.0
   timezone: ^0.9.2
   permission_handler: ^11.1.0
   
@@ -54,3 +53,4 @@ flutter:
   
   assets:
     - assets/sounds/
+    - assets/images/

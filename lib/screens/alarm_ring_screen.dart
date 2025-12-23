@@ -6,6 +6,9 @@ import '../missions/shake_mission.dart';
 import '../missions/memory_mission.dart';
 import '../missions/typing_mission.dart';
 import '../missions/barcode_mission.dart';
+import '../missions/photo_mission.dart';
+import '../missions/walking_mission.dart';
+import '../missions/squat_mission.dart';
 import '../services/alarm_service.dart';
 import '../services/notification_service.dart';
 
@@ -24,6 +27,9 @@ class _AlarmRingScreenState extends State<AlarmRingScreen> {
   late int _difficulty;
   bool _missionStarted = false;
   bool _initialized = false;
+  int _snoozeCount = 0;
+  static const int _maxSnoozes = 3;
+  static const List<int> _snoozeDurations = [9, 5, 3]; // Decreasing snooze times
   
   @override
   void didChangeDependencies() {
@@ -135,13 +141,20 @@ class _AlarmRingScreenState extends State<AlarmRingScreen> {
           onComplete: _onMissionComplete,
         );
         
-      // Fallback for not-yet-implemented missions
-      case MissionType.squat:
       case MissionType.photo:
+        return PhotoMission(
+          difficulty: _difficulty,
+          onComplete: _onMissionComplete,
+        );
+        
       case MissionType.walking:
-      default:
-        // Default to math for unimplemented missions
-        return MathMission(
+        return WalkingMission(
+          difficulty: _difficulty,
+          onComplete: _onMissionComplete,
+        );
+        
+      case MissionType.squat:
+        return SquatMission(
           difficulty: _difficulty,
           onComplete: _onMissionComplete,
         );
@@ -255,10 +268,55 @@ class _AlarmRingScreenState extends State<AlarmRingScreen> {
                   ),
                 ),
               ),
+              
+              // Snooze button (limited snoozes)
+              if (_snoozeCount < _maxSnoozes) ...[
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _handleSnooze,
+                  child: Text(
+                    'Snooze (${_snoozeDurations[_snoozeCount]} min) - ${_maxSnoozes - _snoozeCount} left',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+  
+  void _handleSnooze() async {
+    if (_snoozeCount >= _maxSnoozes) return;
+    
+    final snoozeDuration = _snoozeDurations[_snoozeCount];
+    _snoozeCount++;
+    
+    // Stop current alarm
+    await AlarmService.stopAlarm();
+    
+    // Schedule snooze alarm
+    final snoozeTime = DateTime.now().add(Duration(minutes: snoozeDuration));
+    
+    // We'll reschedule via the alarm service
+    // For now, just show message and go back
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⏰ Alarm snoozed for $snoozeDuration minutes'),
+          backgroundColor: const Color(0xFFFF9800),
+        ),
+      );
+      
+      // Return to home - alarm will ring again via notification
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+    
+    // Schedule a notification for snooze
+    await NotificationService.scheduleSnooze(_alarmId, snoozeTime, _missionType.name, _difficulty);
   }
 }

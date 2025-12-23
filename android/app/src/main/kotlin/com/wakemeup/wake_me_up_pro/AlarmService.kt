@@ -27,6 +27,10 @@ class AlarmService : Service() {
         private const val CHANNEL_ID = "alarm_service_channel"
         private const val WAKE_LOCK_TAG = "WakeMeUp::AlarmWakeLock"
         
+        // Gradual volume increase settings
+        private const val VOLUME_RAMP_DURATION_MS = 30000L // 30 seconds
+        private const val VOLUME_RAMP_STEPS = 10
+        
         var isRinging = false
             private set
         
@@ -39,6 +43,8 @@ class AlarmService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioManager: AudioManager? = null
     private var originalVolume: Int = 0
+    private var volumeHandler: android.os.Handler? = null
+    private var volumeRunnable: Runnable? = null
     
     override fun onCreate() {
         super.onCreate()
@@ -95,6 +101,11 @@ class AlarmService : Service() {
     fun stopAlarm() {
         isRinging = false
         
+        // Stop volume ramping
+        volumeRunnable?.let { volumeHandler?.removeCallbacks(it) }
+        volumeHandler = null
+        volumeRunnable = null
+        
         // Stop media player
         mediaPlayer?.apply {
             if (isPlaying) stop()
@@ -135,19 +146,46 @@ class AlarmService : Service() {
     }
     
     /**
-     * Set alarm volume to maximum
+     * Set alarm volume to maximum with gradual increase
      */
     private fun setMaxVolume() {
         audioManager?.let { am ->
             originalVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
             val maxVolume = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-            am.setStreamVolume(
-                AudioManager.STREAM_ALARM,
-                maxVolume,
-                0
-            )
-            Log.d(TAG, "Volume set to maximum: $maxVolume (was: $originalVolume)")
+            
+            // Start at 30% volume
+            val startVolume = (maxVolume * 0.3).toInt().coerceAtLeast(1)
+            am.setStreamVolume(AudioManager.STREAM_ALARM, startVolume, 0)
+            
+            // Gradually increase to max over 30 seconds
+            startGradualVolumeIncrease(startVolume, maxVolume)
+            
+            Log.d(TAG, "Volume starting at: $startVolume, will ramp to: $maxVolume")
         }
+    }
+    
+    /**
+     * Gradually increase volume from start to max
+     */
+    private fun startGradualVolumeIncrease(startVolume: Int, maxVolume: Int) {
+        volumeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        val stepDelay = VOLUME_RAMP_DURATION_MS / VOLUME_RAMP_STEPS
+        val volumeStep = ((maxVolume - startVolume).toFloat() / VOLUME_RAMP_STEPS).coerceAtLeast(1f)
+        var currentStep = 0
+        
+        volumeRunnable = object : Runnable {
+            override fun run() {
+                if (currentStep < VOLUME_RAMP_STEPS && isRinging) {
+                    currentStep++
+                    val newVolume = (startVolume + (volumeStep * currentStep)).toInt().coerceAtMost(maxVolume)
+                    audioManager?.setStreamVolume(AudioManager.STREAM_ALARM, newVolume, 0)
+                    Log.d(TAG, "Volume increased to: $newVolume (step $currentStep/$VOLUME_RAMP_STEPS)")
+                    volumeHandler?.postDelayed(this, stepDelay)
+                }
+            }
+        }
+        
+        volumeHandler?.postDelayed(volumeRunnable!!, stepDelay)
     }
     
     /**
