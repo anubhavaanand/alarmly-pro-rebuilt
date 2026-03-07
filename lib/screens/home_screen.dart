@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/alarm.dart';
+import '../models/sleep_record.dart';
 import '../services/alarm_service.dart';
+import '../services/sleep_tracking_service.dart';
 import 'alarm_edit_screen.dart';
 import 'sleep_tracking_screen.dart';
 import 'sleep_history_screen.dart';
@@ -22,7 +24,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Stream<List<Alarm>> _alarmsStream;
   int _currentIndex = 0;  // 0 = Alarms, 1 = Sleep
-  
+
+  // Sleep stats displayed on the Sleep tab
+  SleepRecord? _lastNightRecord;
+  int _avgQuality = 0;
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +38,25 @@ class _HomeScreenState extends State<HomeScreen> {
         .where()
         .sortByTime()
         .watch(fireImmediately: true);
+
+    _loadSleepStats();
+  }
+
+  Future<void> _loadSleepStats() async {
+    final records = await widget.isar.sleepRecords
+        .where()
+        .sortByBedTimeDesc()
+        .limit(7)
+        .findAll();
+
+    if (!mounted) return;
+    setState(() {
+      _lastNightRecord = records.isNotEmpty ? records.first : null;
+      if (records.isNotEmpty) {
+        final total = records.fold<int>(0, (sum, r) => sum + r.sleepQuality);
+        _avgQuality = total ~/ records.length;
+      }
+    });
   }
 
   @override
@@ -345,27 +370,99 @@ class _HomeScreenState extends State<HomeScreen> {
   }
   
   Widget _buildSleepStats() {
-    return Row(
+    final lastDuration = _lastNightRecord?.sleepDurationString ?? '--';
+    final avgQualityStr =
+        _avgQuality > 0 ? '$_avgQuality%' : '--';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _buildStatBox(
-            icon: Icons.nightlight,
-            label: 'Last Night',
-            value: '--',
-            color: const Color(0xFF6366F1),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatBox(
-            icon: Icons.star,
-            label: 'Avg Quality',
-            value: '--',
-            color: const Color(0xFFFFD700),
-          ),
+        // Auto-tracking status banner
+        if (SleepTrackingService.instance.isTracking)
+          _buildAutoTrackingBanner(),
+        if (SleepTrackingService.instance.isTracking)
+          const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatBox(
+                icon: Icons.nightlight,
+                label: 'Last Night',
+                value: lastDuration,
+                color: const Color(0xFF6366F1),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatBox(
+                icon: Icons.star,
+                label: 'Avg Quality',
+                value: avgQualityStr,
+                color: const Color(0xFFFFD700),
+              ),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  Widget _buildAutoTrackingBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF6366F1).withOpacity(0.3),
+            const Color(0xFF6366F1).withOpacity(0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF6366F1).withOpacity(0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.auto_awesome, color: Color(0xFF6366F1), size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sleep Tracking Active',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  SleepTrackingService.instance.isAutoTracking
+                      ? 'Auto-detected and tracking your sleep'
+                      : 'Monitoring your sleep quality',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _startSleepTracking,
+            child: const Text(
+              'View',
+              style: TextStyle(color: Color(0xFF6366F1)),
+            ),
+          ),
+        ],
+      ),
+    )
+        .animate()
+        .fadeIn()
+        .shimmer(delay: 500.ms, color: const Color(0xFF6366F1));
   }
   
   Widget _buildStatBox({
@@ -466,13 +563,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  void _startSleepTracking() {
-    Navigator.push(
+  void _startSleepTracking() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SleepTrackingScreen(isar: widget.isar),
       ),
     );
+    // Refresh stats when returning from sleep tracking screen
+    _loadSleepStats();
   }
   
   Widget _buildHeader() {
