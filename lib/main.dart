@@ -11,8 +11,10 @@ import 'models/sleep_record.dart';
 import 'models/alarm_stats.dart';
 import 'services/alarm_service.dart';
 import 'services/notification_service.dart';
+import 'services/sleep_tracking_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/alarm_ring_screen.dart';
+import 'screens/sleep_tracking_screen.dart';
 
 /// MethodChannel for receiving intents from native side
 const MethodChannel _intentChannel = MethodChannel('com.wakemeup.intent');
@@ -38,6 +40,20 @@ void main() async {
   
   // Initialize alarm service
   await AlarmService.initialize(isar);
+
+  // Initialize sleep tracking service
+  await SleepTrackingService.initialize(isar);
+
+  // Wire bedtime notification tap → navigate to sleep tracking with autoStart
+  NotificationService.setBedtimeTapCallback(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => SleepTrackingScreen(isar: isar, autoStart: true),
+        ),
+      );
+    });
+  });
   
   // Request critical permissions
   await _requestPermissions();
@@ -124,9 +140,14 @@ class _WakeMeUpProAppState extends State<WakeMeUpProApp> with WidgetsBindingObse
   
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _pendingAlarmData != null) {
-      _navigateToAlarmRing(_pendingAlarmData!);
-      _pendingAlarmData = null;
+    if (state == AppLifecycleState.resumed) {
+      SleepTrackingService.instance.onAppForeground();
+      if (_pendingAlarmData != null) {
+        _navigateToAlarmRing(_pendingAlarmData!);
+        _pendingAlarmData = null;
+      }
+    } else if (state == AppLifecycleState.paused) {
+      SleepTrackingService.instance.onAppBackground();
     }
   }
 

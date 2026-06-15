@@ -5,6 +5,8 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../models/alarm.dart';
+import '../services/sleep_tracking_service.dart';
+import '../services/notification_service.dart';
 
 /// Settings Screen - ALL PREMIUM FEATURES FREE!
 class SettingsScreen extends StatefulWidget {
@@ -34,8 +36,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _smartAlarmDefault = false;
   int _smartAlarmWindow = 30;
   bool _sleepTracking = true;
+  bool _autoSleepTracking = false;
   bool _bedtimeReminder = false;
   TimeOfDay _bedtimeReminderTime = const TimeOfDay(hour: 22, minute: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSleepSettings();
+  }
+
+  void _loadSleepSettings() {
+    final svc = SleepTrackingService.instance;
+    setState(() {
+      _autoSleepTracking = svc.autoSleepTrackingEnabled;
+      _bedtimeReminder = svc.bedtimeReminderEnabled;
+      _bedtimeReminderTime = svc.bedtime;
+    });
+  }
+
+  Future<void> _saveAutoSleepTracking(bool value) async {
+    await SleepTrackingService.instance
+        .saveSettings(autoSleepTracking: value);
+    setState(() => _autoSleepTracking = value);
+  }
+
+  Future<void> _saveBedtimeReminder(bool value) async {
+    await SleepTrackingService.instance
+        .saveSettings(bedtimeReminder: value);
+    if (value) {
+      await NotificationService.scheduleBedtimeReminder(_bedtimeReminderTime);
+    } else {
+      await NotificationService.cancelBedtimeReminder();
+    }
+    setState(() => _bedtimeReminder = value);
+  }
+
+  Future<void> _saveBedtime(TimeOfDay value) async {
+    await SleepTrackingService.instance.saveSettings(bedtime: value);
+    if (_bedtimeReminder) {
+      await NotificationService.scheduleBedtimeReminder(value);
+    }
+    setState(() => _bedtimeReminderTime = value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,17 +173,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 premium: true,
               ),
               _buildSwitchTile(
+                title: 'Auto Sleep Tracking',
+                subtitle: 'Automatically start tracking when you go to bed',
+                value: _autoSleepTracking,
+                onChanged: _saveAutoSleepTracking,
+                premium: true,
+              ),
+              _buildSwitchTile(
                 title: 'Bedtime Reminder',
                 subtitle: 'Notify when it\'s time to sleep',
                 value: _bedtimeReminder,
-                onChanged: (v) => setState(() => _bedtimeReminder = v),
+                onChanged: _saveBedtimeReminder,
                 premium: true,
               ),
               if (_bedtimeReminder)
                 _buildTimeTile(
                   title: 'Bedtime',
                   value: _bedtimeReminderTime,
-                  onChanged: (v) => setState(() => _bedtimeReminderTime = v),
+                  onChanged: _saveBedtime,
                 ),
             ],
           ),

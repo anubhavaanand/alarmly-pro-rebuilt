@@ -1,20 +1,26 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'package:isar/isar.dart';
 import '../models/sleep_record.dart';
+import '../services/sleep_tracking_service.dart';
 
 class SleepTrackingScreen extends StatefulWidget {
   final Isar isar;
+
+  /// Optional alarm time to display on the pre-tracking screen.
   final DateTime? alarmTime;
-  
+
+  /// When true the screen auto-starts tracking without waiting for the user
+  /// to tap "Start Sleep Tracking".
+  final bool autoStart;
+
   const SleepTrackingScreen({
     Key? key,
     required this.isar,
     this.alarmTime,
+    this.autoStart = false,
   }) : super(key: key);
 
   @override
@@ -23,191 +29,90 @@ class SleepTrackingScreen extends StatefulWidget {
 
 class _SleepTrackingScreenState extends State<SleepTrackingScreen>
     with TickerProviderStateMixin {
-  bool _isTracking = false;
-  DateTime? _bedTime;
-  Timer? _updateTimer;
-  StreamSubscription? _accelerometerSubscription;
-  
-  // Movement tracking
-  List<double> _movementData = [];
-  double _currentMovement = 0;
-  double _lastMagnitude = 0;
-  int _movementSampleCount = 0;
-  double _movementSum = 0;
-  
-  // Current sleep phase estimation
-  SleepPhase _currentPhase = SleepPhase.awake;
-  List<SleepPhase> _sleepPhases = [];
-  
+  // Delegate tracking to the shared service.
+  late final SleepTrackingService _service = SleepTrackingService.instance;
+
+  StreamSubscription<SleepTrackingState>? _stateSub;
+  SleepTrackingState _state = const SleepTrackingState(isTracking: false);
+
+  // UI refresh timer (elapsed time counter)
+  Timer? _uiTimer;
+
   // Animation controller for breathing circle
   late AnimationController _breathController;
   late Animation<double> _breathAnimation;
-  
-  // Stats
-  Duration get _elapsedTime => _bedTime != null 
-      ? DateTime.now().difference(_bedTime!) 
-      : Duration.zero;
-  
+
+  Duration get _elapsedTime =>
+      _service.bedTime != null
+          ? DateTime.now().difference(_service.bedTime!)
+          : Duration.zero;
+
   @override
   void initState() {
     super.initState();
-    
+
     _breathController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
-    
+
     _breathAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _breathController, curve: Curves.easeInOut),
     );
+
+    // Subscribe to service state
+    _stateSub = _service.stateStream.listen((s) {
+      if (mounted) setState(() => _state = s);
+    });
+
+    // Seed from current service state
+    _state = SleepTrackingState(
+      isTracking: _service.isTracking,
+      isAutoTracking: _service.isAutoTracking,
+      bedTime: _service.bedTime,
+      currentMovement: _service.currentMovement,
+    );
+
+    if (_state.isTracking) {
+      _startUiTimer();
+    }
+
+    // Auto-start if requested (e.g. launched from bedtime notification)
+    if (widget.autoStart && !_service.isTracking) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startTracking());
+    }
   }
-  
+
   @override
   void dispose() {
-    _updateTimer?.cancel();
-    _accelerometerSubscription?.cancel();
+    _uiTimer?.cancel();
+    _stateSub?.cancel();
     _breathController.dispose();
     super.dispose();
   }
-  
+
   void _startTracking() {
-    setState(() {
-      _isTracking = true;
-      _bedTime = DateTime.now();
-      _movementData = [];
-      _sleepPhases = [];
-      _currentPhase = SleepPhase.awake;
-    });
-    
-    // Keep screen dim but on
+    _service.startTracking();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-    
-    // Start accelerometer monitoring
-    _startMovementTracking();
-    
-    // Update UI every second
-    _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _startUiTimer();
+  }
+
+  void _startUiTimer() {
+    _uiTimer?.cancel();
+    _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
   }
-  
-  void _startMovementTracking() {
-    _accelerometerSubscription = accelerometerEventStream().listen((event) {
-      final magnitude = sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z
-      );
-      
-      // Calculate movement as change in acceleration
-      final movement = (magnitude - _lastMagnitude).abs();
-      _lastMagnitude = magnitude;
-      
-      _movementSum += movement;
-      _movementSampleCount++;
-      
-      // Every 10 minutes, save average movement
-      if (_movementSampleCount >= 600 * 10) { // ~10 min at 10Hz
-        final avgMovement = _movementSum / _movementSampleCount;
-        _movementData.add(avgMovement);
-        _estimateSleepPhase(avgMovement);
-        _movementSum = 0;
-        _movementSampleCount = 0;
-      }
-      
-      // Update current movement display (smoothed)
-      _currentMovement = _currentMovement * 0.9 + movement * 0.1;
-    });
-  }
-  
-  void _estimateSleepPhase(double movement) {
-    // Simple phase estimation based on movement
-    SleepPhase phase;
-    if (movement > 1.5) {
-      phase = SleepPhase.awake;
-    } else if (movement > 0.8) {
-      phase = SleepPhase.light;
-    } else if (movement > 0.3) {
-      phase = SleepPhase.rem;
-    } else {
-      phase = SleepPhase.deep;
-    }
-    
-    _sleepPhases.add(phase);
-    setState(() {
-      _currentPhase = phase;
-    });
-  }
-  
+
   Future<void> _stopTracking() async {
-    if (_bedTime == null) return;
-    
-    final wakeTime = DateTime.now();
-    
-    // Calculate sleep stats
-    final totalMinutes = wakeTime.difference(_bedTime!).inMinutes;
-    int deepMinutes = 0;
-    int lightMinutes = 0;
-    int remMinutes = 0;
-    int awakeMinutes = 0;
-    
-    for (final phase in _sleepPhases) {
-      switch (phase) {
-        case SleepPhase.deep:
-          deepMinutes += 10;
-          break;
-        case SleepPhase.light:
-          lightMinutes += 10;
-          break;
-        case SleepPhase.rem:
-          remMinutes += 10;
-          break;
-        case SleepPhase.awake:
-          awakeMinutes += 10;
-          break;
-      }
-    }
-    
-    // Calculate quality score
-    final sleepEfficiency = totalMinutes > 0 
-        ? ((totalMinutes - awakeMinutes) / totalMinutes * 100).round()
-        : 0;
-    final deepSleepRatio = totalMinutes > 0 
-        ? (deepMinutes / totalMinutes * 100)
-        : 0;
-    final quality = ((sleepEfficiency + deepSleepRatio) / 2).round().clamp(0, 100);
-    
-    // Save sleep record
-    final record = SleepRecord.create(
-      bedTime: _bedTime!,
-      wakeTime: wakeTime,
-      sleepQuality: quality,
-      deepSleepMinutes: deepMinutes,
-      lightSleepMinutes: lightMinutes,
-      remSleepMinutes: remMinutes,
-      awakeMinutes: awakeMinutes,
-      movementData: _movementData,
-    );
-    
-    await widget.isar.writeTxn(() async {
-      await widget.isar.sleepRecords.put(record);
-    });
-    
-    // Stop tracking
-    _updateTimer?.cancel();
-    _accelerometerSubscription?.cancel();
-    
+    _uiTimer?.cancel();
+    final record = await _service.stopTracking();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    
-    setState(() {
-      _isTracking = false;
-      _bedTime = null;
-    });
-    
-    // Show summary
-    if (mounted) {
+    if (mounted && record != null) {
       _showSleepSummary(record);
     }
   }
-  
+
   void _showSleepSummary(SleepRecord record) {
     showModalBottomSheet(
       context: context,
@@ -236,7 +141,7 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Quality score circle
                 Container(
                   width: 160,
@@ -273,10 +178,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
-                // Sleep duration
+
                 _buildSummaryRow(
                   icon: Icons.bedtime,
                   label: 'Sleep Duration',
@@ -306,9 +210,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                   value: '${record.awakeMinutes}m',
                   color: const Color(0xFFFF3366),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -334,7 +238,7 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
       ),
     );
   }
-  
+
   Widget _buildSummaryRow({
     required IconData icon,
     required String label,
@@ -370,30 +274,33 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isTracking = _state.isTracking;
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A14),
-      appBar: _isTracking ? null : AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Sleep Tracking'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: isTracking
+          ? null
+          : AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: const Text('Sleep Tracking'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
       body: SafeArea(
-        child: _isTracking ? _buildTrackingView() : _buildStartView(),
+        child: isTracking ? _buildTrackingView() : _buildStartView(),
       ),
     );
   }
-  
+
   Widget _buildStartView() {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           const Spacer(),
-          
+
           // Moon animation
           AnimatedBuilder(
             animation: _breathAnimation,
@@ -432,9 +339,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
               .animate()
               .fadeIn(duration: 1.seconds)
               .scale(begin: const Offset(0.8, 0.8)),
-          
+
           const SizedBox(height: 48),
-          
+
           const Text(
             'Sleep Tracking',
             style: TextStyle(
@@ -443,9 +350,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
               fontWeight: FontWeight.bold,
             ),
           ),
-          
+
           const SizedBox(height: 12),
-          
+
           Text(
             'Place your phone on the mattress\nto track your sleep patterns',
             style: TextStyle(
@@ -455,11 +362,12 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
             ),
             textAlign: TextAlign.center,
           ),
-          
+
           if (widget.alarmTime != null) ...[
             const SizedBox(height: 24),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A2E),
                 borderRadius: BorderRadius.circular(16),
@@ -485,16 +393,18 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
               ),
             ),
           ],
-          
+
           const Spacer(),
-          
-          // Features list
+
           _buildFeatureItem(Icons.timeline, 'Sleep cycle analysis'),
           _buildFeatureItem(Icons.bar_chart, 'Sleep quality score'),
           _buildFeatureItem(Icons.history, 'Sleep history tracking'),
-          
+          if (_service.autoSleepTrackingEnabled)
+            _buildFeatureItem(
+                Icons.auto_awesome, 'Auto-tracking active at bedtime'),
+
           const SizedBox(height: 32),
-          
+
           // Start button
           SizedBox(
             width: double.infinity,
@@ -527,13 +437,13 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
               .animate()
               .fadeIn(delay: 500.ms)
               .slideY(begin: 0.3, end: 0),
-          
+
           const SizedBox(height: 24),
         ],
       ),
     );
   }
-  
+
   Widget _buildFeatureItem(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -556,13 +466,11 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
       ),
     );
   }
-  
+
   Widget _buildTrackingView() {
+    final phase = _state.currentPhase;
     return GestureDetector(
-      onTap: () {
-        // Show wake up button on tap
-        _showWakeUpDialog();
-      },
+      onTap: _showWakeUpDialog,
       child: Container(
         width: double.infinity,
         height: double.infinity,
@@ -570,6 +478,38 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            if (_state.isAutoTracking)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF6366F1).withOpacity(0.4),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.auto_awesome,
+                          color: Color(0xFF6366F1), size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Auto-Tracking',
+                        style: TextStyle(
+                          color: Color(0xFF6366F1),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // Current phase indicator
             AnimatedBuilder(
               animation: _breathAnimation,
@@ -582,8 +522,8 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        Color(_currentPhase.color),
-                        Color(_currentPhase.color).withOpacity(0.3),
+                        Color(phase.color),
+                        Color(phase.color).withOpacity(0.3),
                         Colors.transparent,
                       ],
                       stops: const [0.2, 0.5, 1.0],
@@ -603,9 +543,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _currentPhase.displayName,
+                          phase.displayName,
                           style: TextStyle(
-                            color: Color(_currentPhase.color),
+                            color: Color(phase.color),
                             fontSize: 18,
                             fontWeight: FontWeight.w500,
                           ),
@@ -616,9 +556,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 60),
-            
+
             // Movement indicator
             Column(
               children: [
@@ -639,10 +579,11 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                   ),
                   child: FractionallySizedBox(
                     alignment: Alignment.centerLeft,
-                    widthFactor: (_currentMovement / 3).clamp(0, 1),
+                    widthFactor:
+                        (_state.currentMovement / 3).clamp(0, 1),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Color(_currentPhase.color),
+                        color: Color(phase.color),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -650,9 +591,9 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 80),
-            
+
             Text(
               'Tap anywhere to wake up',
               style: TextStyle(
@@ -665,7 +606,7 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
       ),
     );
   }
-  
+
   void _showWakeUpDialog() {
     showDialog(
       context: context,
@@ -699,13 +640,13 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen>
       ),
     );
   }
-  
+
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     return '${hours}h ${minutes.toString().padLeft(2, '0')}m';
   }
-  
+
   String _formatTime(DateTime time) {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
