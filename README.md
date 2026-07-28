@@ -67,7 +67,7 @@ flutter doctor --android-licenses
 Navigate to the project directory and install dependencies:
 
 ```bash
-cd "/home/anubhavanand/Documents/alarmly pro rebuilt"
+cd path/to/wake_me_up_pro
 
 # Get Flutter packages
 flutter pub get

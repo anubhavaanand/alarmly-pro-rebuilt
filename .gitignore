@@ -273,3 +273,12 @@ scratch/
 security_scan/
 vulnerability_report/
 *.sarif
+
+# ============================================
+# 🖥️ WORKSPACE & IDE
+# ============================================
+*.code-workspace
+.idea/
+.vscode/
+*.iml
+.DS_Store

@@ -13,8 +13,6 @@
 - Smart Alarm with adaptive wake window
 - Gentle Wake with gradual volume increase
 - Pre-alarm notifications
-- Weather announcements
-- Motivational quotes
 
 #### 🎯 8 Wake-Up Missions
 - 🧮 Math Problems (Easy/Medium/Hard)
