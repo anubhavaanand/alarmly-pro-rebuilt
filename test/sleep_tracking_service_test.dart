@@ -70,16 +70,9 @@ void main() {
     });
 
     test('just outside the window boundary (121 min after)', () {
-      // 22:00 + 2h01m = 00:01
-      expect(_inWindow(const TimeOfDay(hour: 0, minute: 1), bedtime), isTrue);
       // 22:00 + 2h01m = 00:01 → diff = 121
-      // We expect this to be FALSE since 121 > 120 AND 121 < 24*60 - 120.
-      final nowMin = 0 * 60 + 1;
-      final bedMin = 22 * 60 + 0;
-      final diff = ((nowMin - bedMin) % (24 * 60) + (24 * 60)) % (24 * 60);
-      // diff = (1 - 1320 + 1440) % 1440 = 121
-      expect(diff, equals(121));
-      expect(diff <= 120 || diff >= (24 * 60) - 120, isFalse);
+      // Should be FALSE since 121 > 120 AND 121 < 24*60 - 120.
+      expect(_inWindow(const TimeOfDay(hour: 0, minute: 1), bedtime), isFalse);
     });
 
     test('middle of the day is outside the window', () {
